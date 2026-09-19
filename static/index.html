@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SignBridge — Speech to Sign Language</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Vendored Local CWASA / JASigning WebGL Avatar Assets (Offline Capable) -->
+  <link rel="stylesheet" href="cwasa/cwa/cwasa.css" type="text/css"/>
+  <script type="text/javascript" src="cwasa/cwa/allcsa.js"></script>
+
+  <style>
+    :root {
+      --bg-primary: #090d16;
+      --bg-secondary: #0f172a;
+      --bg-card: rgba(30, 41, 59, 0.7);
+      --bg-card-border: rgba(255, 255, 255, 0.08);
+      --bg-card-hover: rgba(51, 65, 85, 0.6);
+      
+      --accent-indigo: #6366f1;
+      --accent-violet: #8b5cf6;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-amber: #f59e0b;
+
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-subtle: #64748b;
+
+      --radius-xl: 20px;
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --radius-sm: 6px;
+
+      --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 20% 10%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 80% 90%, rgba(139, 92, 246, 0.1) 0%, transparent 40%);
+    }
+
+    /* Hide CWASA SiGML raw text/URL input controls so raw SiGML is never user-visible */
+    .CWASAPanel .txtaSiGMLText,
+    .CWASAPanel .txtSiGMLURL,
+    .CWASAPanel .bttnPlaySiGMLText,
+    .CWASAPanel .bttnPlaySiGMLURL,
+    .txtaSiGMLText,
+    .txtSiGMLURL,
+    .bttnPlaySiGMLText,
+    .bttnPlaySiGMLURL,
+    .txtSF,
+    .txtFPS {
+      display: none !important;
+    }
+
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--bg-card-border);
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 0.9rem 1.75rem;
+    }
+
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 1.35rem;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+    }
+
+    .brand-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-tagline {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .system-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      font-size: 0.82rem;
+      color: var(--accent-emerald);
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+    }
+
+    /* Main App Container */
+    .container {
+      max-width: 1100px;
+      width: 100%;
+      margin: 1.75rem auto;
+      padding: 0 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      flex: 1;
+    }
+
+    /* CWASA WebGL Avatar Display Card */
+    .avatar-card {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-xl);
+      padding: 1.5rem;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .avatar-header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .avatar-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .select-sm {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: 0.4rem 0.85rem;
+      border-radius: var(--radius-md);
+      outline: none;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .select-sm:hover {
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #fff;
+    }
+
+    /* CWASA Viewport Box */
+    .avatar-viewport {
+      width: 100%;
+      max-width: 720px;
+      height: 460px;
+      background: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-lg);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      box-shadow: inset 0 0 35px rgba(0,0,0,0.6);
+      transition: border-color 0.3s ease;
+    }
+
+    .avatar-viewport.signing-active {
+      border-color: rgba(99, 102, 241, 0.5);
+      box-shadow: inset 0 0 45px rgba(99, 102, 241, 0.15), 0 0 25px rgba(99, 102, 241, 0.2);
+    }
+
+    /* CWASA Native Canvas */
+    .CWASAAvatar {
+      width: 100% !important;
+      height: 100% !important;
+      background: transparent !important;
+    }
+
+    .CWASAAvatar canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: contain;
+      border-radius: var(--radius-lg);
+    }
+
+    /* Active Sign Overlay Badge */
+    .sign-overlay-badge {
+      position: absolute;
+      top: 1.25rem;
+      left: 1.25rem;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      backdrop-filter: blur(12px);
+      padding: 0.45rem 1rem;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+      z-index: 10;
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+    }
+
+    .badge-dot.active {
+      background: var(--accent-indigo);
+      box-shadow: 0 0 12px var(--accent-indigo);
+      animation: dotPulse 1.2s infinite ease-in-out;
+    }
+
+    @keyframes dotPulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.4); opacity: 1; }
+    }
+
+    /* Signing Status & Sequence Dots Section */
+    .signing-status-bar {
+      margin-top: 1.25rem;
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .status-text-main {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-highlight {
+      color: #fff;
+      font-weight: 700;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    /* Multi-sign Progress Dots */
+    .sequence-dots {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      margin-top: 0.2rem;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      transition: all 0.3s ease;
+    }
+
+    .dot.active {
+      background: var(--accent-indigo);
+      box-shadow: 0 0 10px var(--accent-indigo);
+      transform: scale(1.3);
+    }
+
+    .dot.completed {
+      background: var(--accent-emerald);
+    }
+
+    /* Missing Sign Alert Banner */
+    .missing-sign-alert {
+      margin-top: 0.75rem;
+      width: 100%;
+      max-width: 720px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fde68a;
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      font-size: 0.88rem;
+      display: none;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    /* Input & Control Card */
+    .control-card {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-xl);
+      padding: 1.75rem;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .section-label {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .text-input-wrapper {
+      position: relative;
+    }
+
+    textarea.main-input {
+      width: 100%;
+      min-height: 100px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.25rem;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 1rem;
+      line-height: 1.5;
+      outline: none;
+      resize: vertical;
+      transition: all 0.2s ease;
+    }
+
+    textarea.main-input:focus {
+      border-color: var(--accent-indigo);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+      background: rgba(15, 23, 42, 0.85);
+    }
+
+    /* Example Chips */
+    .examples-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .example-label {
+      font-size: 0.78rem;
+      color: var(--text-subtle);
+    }
+
+    .chip-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-muted);
+      padding: 0.35rem 0.8rem;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .chip-btn:hover {
+      background: rgba(99, 102, 241, 0.15);
+      color: #fff;
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+
+    /* Action Buttons Bar */
+    .actions-bar {
+      display: grid;
+      grid-template-columns: 1fr 1.5fr;
+      gap: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    @media (max-width: 640px) {
+      .actions-bar {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .btn-action {
+      padding: 0.95rem 1.5rem;
+      border-radius: var(--radius-lg);
+      font-weight: 600;
+      font-size: 0.98rem;
+      cursor: pointer;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    /* Microphone Button */
+    .btn-mic {
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text-main);
+      border: 1px solid var(--bg-card-border);
+    }
+
+    .btn-mic:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-mic.recording {
+      background: rgba(244, 63, 94, 0.2);
+      border-color: var(--accent-rose);
+      color: var(--accent-rose);
+      animation: micPulse 1.5s infinite;
+    }
+
+    @keyframes micPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4); }
+      50% { box-shadow: 0 0 0 10px rgba(244, 63, 94, 0); }
+    }
+
+    /* Primary Translate Button */
+    .btn-translate {
+      background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+      color: #fff;
+      box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35);
+    }
+
+    .btn-translate:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
+    }
+
+    .btn-translate:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Voice Status Indicator Bar */
+    .voice-status-bar {
+      font-size: 0.83rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: -0.5rem;
+    }
+
+    footer {
+      border-top: 1px solid var(--bg-card-border);
+      padding: 1.25rem 2rem;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--text-subtle);
+      background: rgba(15, 23, 42, 0.8);
+      margin-top: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header>
+    <div class="header-content">
+      <div class="brand">
+        <div class="brand-icon">S</div>
+        <div>
+          <div class="brand-name">SignBridge</div>
+          <div class="brand-tagline">Speech → Sign Language</div>
+        </div>
+      </div>
+
+      <div class="system-status" id="systemStatusBadge">
+        <div class="status-dot"></div>
+        <span id="systemStatusText">Ready</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div class="container">
+
+    <!-- CWASA 3D WebGL Sign Language Display Card -->
+    <div class="avatar-card">
+      <div class="avatar-header">
+        <div class="avatar-title">
+          <svg width="22" height="22" fill="none" stroke="var(--accent-indigo)" stroke-width="2" viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+          3D Sign Language Avatar
+        </div>
+        <div>
+          <select class="select-sm" id="avMenuSelect" onchange="changeAvatar(this.value)">
+            <option value="anna" selected>Avatar: Anna</option>
+            <option value="marc">Avatar: Marc</option>
+            <option value="francoise">Avatar: Francoise</option>
+            <option value="luna">Avatar: Luna</option>
+            <option value="siggi">Avatar: Siggi</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- CWASA WebGL Viewport Container -->
+      <div class="avatar-viewport" id="stageCWASAContainer">
+        <div class="sign-overlay-badge" id="signBadge">
+          <div class="badge-dot" id="badgeDot"></div>
+          <span id="badgeText">Ready</span>
+        </div>
+
+        <div class="CWASAAvatar av0" align="center">
+          <div class="CWASAPanel av0" style="display:none;"></div>
+          <div class="CWASAProgress av0" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Signing Status Bar & Sequence Dots -->
+      <div class="signing-status-bar">
+        <div class="status-text-main" id="statusTextMain">
+          ● <span id="statusMessage">Ready for voice or text input</span>
+        </div>
+        <div class="sequence-dots" id="sequenceDots" style="display: none;"></div>
+      </div>
+
+      <!-- Missing Sign Alert Banner -->
+      <div class="missing-sign-alert" id="missingSignAlert" style="display: none;">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        <span id="missingSignText">The sign for this word is not available yet.</span>
+      </div>
+    </div>
+
+    <!-- User Action / Controls Card -->
+    <div class="control-card">
+      <div class="section-label">
+        <span>What would you like to say?</span>
+      </div>
+
+      <div class="text-input-wrapper">
+        <textarea id="mainInput" class="main-input" placeholder="Type something you want to sign..." aria-label="Text to sign input">angry</textarea>
+      </div>
+
+      <!-- Example Chips -->
+      <div class="examples-row">
+        <span class="example-label">Try an example:</span>
+        <button class="chip-btn" onclick="useExample('angry')">"angry"</button>
+        <button class="chip-btn" onclick="useExample('A')">"A"</button>
+        <button class="chip-btn" onclick="useExample('water')">"water"</button>
+        <button class="chip-btn" onclick="useExample('I want water')">"I want water"</button>
+      </div>
+
+      <!-- Action Buttons Bar -->
+      <div class="actions-bar">
+        <button class="btn-action btn-mic" id="micBtn" onclick="toggleVoiceRecording()" aria-label="Start voice recording">
+          <svg id="micIcon" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+          <span id="micLabel">Speak</span>
+        </button>
+
+        <button class="btn-action btn-translate" id="translateBtn" onclick="handleTranslateAndSign()" aria-label="Translate and Sign">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
+          <span id="translateLabel">Translate & Sign</span>
+        </button>
+      </div>
+
+      <!-- Voice Status Display -->
+      <div class="voice-status-bar" id="voiceStatusBar">
+        <span id="voiceStatusText">● Ready for voice or text input</span>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    SignBridge • Accessibility & Speech-to-Sign Language Interface
+  </footer>
+
+  <script>
+    // Global Playback State & Event Handlers
+    let activeSequenceTokens = [];
+    let currentSignIndex = 0;
+    let playbackCallbacks = {
+      onSignStart: null,
+      onComplete: null,
+      onError: null
+    };
+
+    // CWASA Initialization Config
+    const cwasaConfig = {
+      "jasBase": "cwasa/",
+      "avs": ["anna", "marc", "francoise"],
+      "avList": "avs",
+      "initAv": "anna",
+      "allowSiGMLText": false,
+      "initSiGMLURL": null
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initCwasaPlayer();
+    });
+
+    function initCwasaPlayer() {
+      if (typeof CWASA !== 'undefined') {
+        try {
+          // Register real CWASA hooks for playback events
+          if (CWASA.addHook) {
+            CWASA.addHook("avatarsign", (evt) => {
+              const gloss = (evt && evt.msg && evt.msg.g) ? evt.msg.g : "";
+              if (playbackCallbacks.onSignStart) {
+                playbackCallbacks.onSignStart(gloss);
+              }
+            });
+
+            CWASA.addHook("animidle", (evt) => {
+              if (playbackCallbacks.onComplete) {
+                const cb = playbackCallbacks.onComplete;
+                playbackCallbacks.onComplete = null;
+                cb();
+              }
+            });
+          }
+
+          CWASA.init(cwasaConfig);
+        } catch (e) {
+          // CWASA loading fallback
+        }
+      }
+    }
+
+    // 3. WRAPPER — THE ONLY WAY SIGML REACHES THE PLAYER
+    function playSignSequence(sigmlString, { onSignStart, onComplete, onError } = {}) {
+      playbackCallbacks.onSignStart = onSignStart || null;
+      playbackCallbacks.onComplete = onComplete || null;
+      playbackCallbacks.onError = onError || null;
+
+      if (!sigmlString || !sigmlString.includes('<hns_sign')) {
+        if (playbackCallbacks.onError) {
+          playbackCallbacks.onError("No signs available");
+        }
+        return;
+      }
+
+      if (typeof CWASA !== 'undefined' && CWASA.playSiGMLText) {
+        try {
+          CWASA.playSiGMLText(sigmlString);
+        } catch (err) {
+          if (playbackCallbacks.onError) {
+            playbackCallbacks.onError(err);
+          }
+        }
+      } else {
+        if (playbackCallbacks.onError) {
+          playbackCallbacks.onError("CWASA Player not initialized");
+        }
+      }
+    }
+
+    function changeAvatar(avatarName) {
+      const selectEl = document.querySelector('.menuAv');
+      if (selectEl) {
+        selectEl.value = avatarName;
+        selectEl.dispatchEvent(new Event('change'));
+      }
+    }
+
+    function useExample(phrase) {
+      document.getElementById('mainInput').value = phrase;
+      handleTranslateAndSign();
+    }
+
+    // Main Translate & Sign Handler
+    async function handleTranslateAndSign() {
+      const textInput = document.getElementById('mainInput').value.trim();
+      if (!textInput) return;
+
+      const translateBtn = document.getElementById('translateBtn');
+      const translateLabel = document.getElementById('translateLabel');
+      const missingAlert = document.getElementById('missingSignAlert');
+      const missingText = document.getElementById('missingSignText');
+
+      // Disable button while processing/signing
+      translateBtn.disabled = true;
+      translateLabel.textContent = 'Signing...';
+      missingAlert.style.display = 'none';
+
+      try {
+        // Step 1: Call POST /sign/sequence
+        const res = await fetch('/sign/sequence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: textInput })
+        });
+
+        if (!res.ok) throw new Error("Sequence lookup failed");
+        const data = await res.json();
+
+        const tokens = data.tokens || [];
+        const availableTokens = tokens.filter(t => t.available);
+        const missingTokens = tokens.filter(t => !t.available);
+
+        activeSequenceTokens = availableTokens;
+        currentSignIndex = 0;
+
+        // Handle missing sign banner
+        if (missingTokens.length > 0) {
+          const missingWords = missingTokens.map(t => `"${t.word}"`).join(', ');
+          missingText.textContent = `The sign for ${missingWords} is not available yet.`;
+          missingAlert.style.display = 'flex';
+        }
+
+        if (availableTokens.length === 0) {
+          updateStatusUI('no_signs');
+          translateBtn.disabled = false;
+          translateLabel.textContent = 'Translate & Sign';
+          return;
+        }
+
+        renderSequenceDots(availableTokens.length);
+        document.getElementById('stageCWASAContainer').classList.add('signing-active');
+
+        // Play sequence via exact wrapper function
+        playSignSequence(data.sigml, {
+          onSignStart: (gloss) => {
+            const displayGloss = gloss || (activeSequenceTokens[currentSignIndex] ? activeSequenceTokens[currentSignIndex].gloss : "SIGN");
+            updateStatusUI('signing', displayGloss);
+            updateSequenceDots(currentSignIndex);
+            currentSignIndex++;
+          },
+          onComplete: () => {
+            updateStatusUI('complete');
+            updateSequenceDots(availableTokens.length);
+            document.getElementById('stageCWASAContainer').classList.remove('signing-active');
+            translateBtn.disabled = false;
+            translateLabel.textContent = 'Translate & Sign';
+          },
+          onError: (err) => {
+            updateStatusUI('error');
+            document.getElementById('stageCWASAContainer').classList.remove('signing-active');
+            translateBtn.disabled = false;
+            translateLabel.textContent = 'Translate & Sign';
+          }
+        });
+
+      } catch (err) {
+        updateStatusUI('error');
+        translateBtn.disabled = false;
+        translateLabel.textContent = 'Translate & Sign';
+      }
+    }
+
+    function updateStatusUI(state, extra) {
+      const badgeText = document.getElementById('badgeText');
+      const badgeDot = document.getElementById('badgeDot');
+      const statusMsg = document.getElementById('statusMessage');
+
+      if (state === 'signing') {
+        const glossName = (extra || '').toUpperCase();
+        badgeText.textContent = `Signing: ${glossName}`;
+        badgeDot.classList.add('active');
+        statusMsg.innerHTML = `Currently signing: <span class="status-highlight">${glossName}</span>`;
+      } else if (state === 'complete') {
+        badgeText.textContent = 'Complete';
+        badgeDot.classList.remove('active');
+        statusMsg.textContent = 'Sign complete';
+      } else if (state === 'no_signs') {
+        badgeText.textContent = 'Unavailable';
+        badgeDot.classList.remove('active');
+        statusMsg.textContent = 'No available signs to perform.';
+      } else if (state === 'error') {
+        badgeText.textContent = 'Error';
+        badgeDot.classList.remove('active');
+        statusMsg.textContent = "We couldn't play that sign.";
+      }
+    }
+
+    function renderSequenceDots(count) {
+      const container = document.getElementById('sequenceDots');
+      container.innerHTML = '';
+      if (count <= 1) {
+        container.style.display = 'none';
+        return;
+      }
+      container.style.display = 'flex';
+
+      for (let i = 0; i < count; i++) {
+        const dot = document.createElement('div');
+        dot.className = i === 0 ? 'dot active' : 'dot';
+        dot.id = `seqDot_${i}`;
+        container.appendChild(dot);
+      }
+    }
+
+    function updateSequenceDots(activeIndex) {
+      const container = document.getElementById('sequenceDots');
+      const dots = container.querySelectorAll('.dot');
+      dots.forEach((dot, idx) => {
+        if (idx < activeIndex) {
+          dot.className = 'dot completed';
+        } else if (idx === activeIndex) {
+          dot.className = 'dot active';
+        } else {
+          dot.className = 'dot';
+        }
+      });
+    }
+
+    // Voice Recording Handler
+    let isRecording = false;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordTimerInterval = null;
+    let recordSeconds = 0;
+    let recordingStartTime = 0;
+    let recordingAutoStopTimeout = null;
+    let micStream = null;
+
+    async function toggleVoiceRecording() {
+      if (!isRecording) {
+        startRecording();
+      } else {
+        stopRecording();
+      }
+    }
+
+    async function startRecording() {
+      audioChunks = [];
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            sampleRate: 16000,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+
+        let chosenMimeType = '';
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          chosenMimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+          chosenMimeType = 'audio/ogg;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          chosenMimeType = 'audio/mp4';
+        }
+
+        const options = chosenMimeType ? { mimeType: chosenMimeType } : {};
+        mediaRecorder = new MediaRecorder(micStream, options);
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            audioChunks.push(e.data);
+          }
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        recordingStartTime = Date.now();
+        recordSeconds = 0;
+
+        if (recordingAutoStopTimeout) clearTimeout(recordingAutoStopTimeout);
+        recordingAutoStopTimeout = setTimeout(() => {
+          if (isRecording) stopRecording();
+        }, 30000);
+
+        const micBtn = document.getElementById('micBtn');
+        micBtn.classList.add('recording');
+        document.getElementById('micLabel').textContent = 'Recording... 00:00';
+        document.getElementById('voiceStatusText').textContent = '🔴 Recording speech... Click again to stop.';
+
+        recordTimerInterval = setInterval(() => {
+          recordSeconds++;
+          const mins = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
+          const secs = String(recordSeconds % 60).padStart(2, '0');
+          document.getElementById('micLabel').textContent = `Recording... ${mins}:${secs}`;
+        }, 1000);
+
+      } catch (err) {
+        document.getElementById('voiceStatusText').textContent = 'Unable to access microphone. Please check browser permissions.';
+      }
+    }
+
+    async function stopRecording() {
+      if (!mediaRecorder || !isRecording) return;
+      isRecording = false;
+      if (recordingAutoStopTimeout) clearTimeout(recordingAutoStopTimeout);
+      clearInterval(recordTimerInterval);
+
+      const micBtn = document.getElementById('micBtn');
+      micBtn.classList.remove('recording');
+      document.getElementById('micLabel').textContent = 'Speak';
+      document.getElementById('voiceStatusText').textContent = '◌ Processing speech audio...';
+
+      const durationMs = Date.now() - recordingStartTime;
+
+      const audioBlob = await new Promise((resolve) => {
+        mediaRecorder.onstop = () => {
+          const actualMime = mediaRecorder.mimeType || 'audio/webm';
+          const blob = new Blob(audioChunks, { type: actualMime });
+          
+          if (micStream) {
+            micStream.getTracks().forEach(t => t.stop());
+            micStream = null;
+          }
+          resolve(blob);
+        };
+        mediaRecorder.stop();
+      });
+
+      if (audioBlob.size < 2000 || durationMs < 600) {
+        document.getElementById('voiceStatusText').textContent = "We didn't catch that. Try holding the button a little longer.";
+        return;
+      }
+
+      await processVoiceAudio(audioBlob);
+    }
+
+    async function processVoiceAudio(blob) {
+      const actualMime = blob.type || '';
+      let ext = 'webm';
+      if (actualMime.includes('mp4')) ext = 'm4a';
+      else if (actualMime.includes('ogg')) ext = 'ogg';
+
+      const formData = new FormData();
+      formData.append("file", blob, `recording.${ext}`);
+
+      try {
+        const response = await fetch('/transcribe', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          const errDetail = data && data.detail ? data.detail : {};
+          const msg = errDetail.message || "We couldn't read that recording. Please try again.";
+          document.getElementById('voiceStatusText').textContent = `⚠️ ${msg}`;
+          return;
+        }
+
+        if (data.text) {
+          document.getElementById('mainInput').value = data.text;
+          document.getElementById('voiceStatusText').textContent = '✓ Speech recognized! Review or edit text below, then click Translate & Sign.';
+        } else {
+          document.getElementById('voiceStatusText').textContent = "We didn't hear any speech.";
+        }
+      } catch (err) {
+        document.getElementById('voiceStatusText').textContent = "We couldn't read that recording. Please try again.";
+      }
+    }
+
+    // Keyboard Shortcut (Ctrl+Enter to Submit)
+    document.getElementById('mainInput').addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleTranslateAndSign();
+      }
+    });
+  </script>
+</body>
+</html>

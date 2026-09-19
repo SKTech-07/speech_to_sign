@@ -1,0 +1,15 @@
+fastapi>=0.100.0
+uvicorn>=0.22.0
+pydantic>=2.0.0
+spacy>=3.5.0
+openai-whisper
+faster-whisper>=1.0.0
+rapidfuzz>=3.0.0
+openai>=1.0.0
+torch
+transformers
+python-multipart
+pytest>=7.0.0
+httpx>=0.24.0
+python-dotenv>=1.0.0
+
