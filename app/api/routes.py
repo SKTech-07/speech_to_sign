@@ -237,10 +237,10 @@ async def gloss_to_sign(payload: GlossToSignRequest):
 @router.post("/sign/sequence", response_model=SignSequenceResponse, tags=["Sign Sequence"])
 async def create_sign_sequence(payload: SignSequenceRequest):
     """
-    Tokenizes input text, matches words case-insensitively against data/SignFiles/,
-    and returns a single combined SiGML XML document and token availability list.
+    Converts English input text to an ISL Gloss sequence using the gloss generator,
+    performs dictionary lookups for each gloss term (with surface form -> lemma fallback),
+    and returns a combined SiGML XML document and token availability list.
     """
-    import re
     if not payload.text or not payload.text.strip():
         return SignSequenceResponse(
             text=payload.text or "",
@@ -248,26 +248,55 @@ async def create_sign_sequence(payload: SignSequenceRequest):
             sigml="<sigml></sigml>"
         )
 
-    cleaned_input = payload.text.lower()
-    raw_tokens = re.findall(r"\b\w+\b", cleaned_input)
+    # 1. Preprocess & Analyze text for Gloss Conversion
+    cleaned_input = preprocess_text(payload.text)
+    nlp_result = analyze_text(cleaned_input)
+    gloss_terms = generate_gloss(cleaned_input, nlp_result)
 
     tokens_result = []
     matched_sigmls = []
 
-    for word in raw_tokens:
-        lookup_res = dictionary_service.lookup_sign(word)
+    # Map word -> lemma from NLP result for lookup fallback
+    token_lemma_map = {}
+    if nlp_result and nlp_result.get("tokens") and nlp_result.get("lemmas"):
+        for t, l in zip(nlp_result["tokens"], nlp_result["lemmas"]):
+            token_lemma_map[t.lower()] = l.lower()
+
+    COMMON_SYNONYMS = {"not": "no", "cannot": "no", "dont": "no", "doesnt": "no", "didnt": "no"}
+
+    # 2. Process each gloss term
+    for gloss in gloss_terms:
+        gloss_lower = gloss.lower()
+        
+        # Try 1: Direct surface form lookup
+        lookup_res = dictionary_service.lookup_sign(gloss_lower)
+
+        # Try 2: Lemma fallback if surface form not found
+        if not lookup_res.get("found"):
+            lemma = token_lemma_map.get(gloss_lower, gloss_lower)
+            if lemma != gloss_lower:
+                lemma_lookup = dictionary_service.lookup_sign(lemma)
+                if lemma_lookup.get("found"):
+                    lookup_res = lemma_lookup
+
+        # Try 3: Synonym fallback (e.g. not -> no)
+        if not lookup_res.get("found") and gloss_lower in COMMON_SYNONYMS:
+            syn_lookup = dictionary_service.lookup_sign(COMMON_SYNONYMS[gloss_lower])
+            if syn_lookup.get("found"):
+                lookup_res = syn_lookup
+
         if lookup_res.get("found") and lookup_res.get("sigml"):
-            matched_key = lookup_res.get("matched_key", word)
+            matched_key = lookup_res.get("matched_key", gloss).upper()
             tokens_result.append(SignSequenceToken(
-                word=word,
+                word=gloss_lower,
                 gloss=matched_key,
                 available=True
             ))
             matched_sigmls.append(lookup_res["sigml"])
         else:
             tokens_result.append(SignSequenceToken(
-                word=word,
-                gloss=word,
+                word=gloss_lower,
+                gloss=gloss.upper(),
                 available=False
             ))
 

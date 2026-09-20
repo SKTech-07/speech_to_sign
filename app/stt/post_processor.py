@@ -38,18 +38,20 @@ def load_dictionary_glosses(sign_files_dir: str = "data/SignFiles") -> List[str]
 
 def build_initial_prompt(sign_files_dir: str = "data/SignFiles", max_len: int = 200) -> str:
     """
-    Builds a domain vocabulary initial_prompt string capped at ~200 characters.
+    Builds a clean domain vocabulary initial_prompt string using real English words.
     """
     global _cached_initial_prompt
     if _cached_initial_prompt:
         return _cached_initial_prompt
 
     glosses = load_dictionary_glosses(sign_files_dir)
+    # Filter for alphabetic words only to avoid numeric prompt bias (0, 1, 10, 100...)
+    alpha_glosses = [g for g in glosses if g.isalpha()]
     
     prompt_words = []
     current_len = 0
     
-    for word in glosses:
+    for word in alpha_glosses:
         w_str = word if not prompt_words else f", {word}"
         if current_len + len(w_str) > max_len:
             break
@@ -63,54 +65,66 @@ def build_initial_prompt(sign_files_dir: str = "data/SignFiles", max_len: int = 
 
 def correct_transcript(raw_text: str, threshold: float = 88.0) -> Tuple[str, bool]:
     """
-    Lowercases and strips the transcript, then fuzzy matches each token against
-    known dictionary glosses using rapidfuzz token_sort_ratio.
-    
-    If a token scores >= 88 against exactly one gloss, substitutes the gloss.
+    Cleans up and optionally corrects minor typos in transcript against dictionary glosses.
+    Preserves exact recognized speech content without dropping spoken words.
     Returns (corrected_text, is_speech_detected).
     """
-    if not raw_text:
+    if not raw_text or not raw_text.strip():
         return "", False
         
-    cleaned_text = raw_text.strip().lower()
-    
-    # Strip non-alphanumeric punctuation except space
-    word_tokens = re.findall(r"\b\w+\b", cleaned_text)
-    
-    if not word_tokens:
-        logger.info(f"Transcript contains no valid words (raw: '{raw_text}') -> NO_SPEECH_DETECTED")
+    raw_clean = raw_text.strip()
+    # Ensure raw_clean contains actual printable content
+    if not re.search(r"[a-zA-Z0-9]", raw_clean):
         return "", False
-        
+
     gloss_list = load_dictionary_glosses()
-    corrected_tokens = []
+    words = raw_clean.split()
+    corrected_words = []
     
-    for token in word_tokens:
-        # Check exact match first
-        if token in gloss_list:
-            corrected_tokens.append(token)
+    for word in words:
+        # Match word prefix/punctuation, core token, and suffix/punctuation
+        match = re.match(r"^([^\w]*)([\w'-]+)([^\w]*)$", word)
+        if not match:
+            corrected_words.append(word)
             continue
             
+        prefix, token, suffix = match.groups()
+        token_lower = token.lower()
+        
+        # Keep exact token if in gloss list or short word (<= 3 chars)
+        if token_lower in gloss_list or len(token_lower) <= 3:
+            corrected_words.append(word)
+            continue
+            
+        # Optional fuzzy match check for minor typos
         matches = []
         for gloss in gloss_list:
-            score = fuzz.token_sort_ratio(token, gloss)
-            if score >= threshold:
-                matches.append((score, gloss))
-                
+            if abs(len(token_lower) - len(gloss)) <= 2:
+                score = fuzz.token_sort_ratio(token_lower, gloss)
+                if score >= threshold:
+                    matches.append((score, gloss))
+                    
         if len(matches) == 1:
             best_gloss = matches[0][1]
-            logger.info(f"Fuzzy match corrected token '{token}' -> '{best_gloss}' (score: {matches[0][0]})")
-            corrected_tokens.append(best_gloss)
+            if token.istitle():
+                best_gloss = best_gloss.capitalize()
+            elif token.isupper():
+                best_gloss = best_gloss.upper()
+            corrected_words.append(f"{prefix}{best_gloss}{suffix}")
         elif len(matches) > 1:
-            # Sort by score descending
             matches.sort(key=lambda x: x[0], reverse=True)
             if matches[0][0] > matches[1][0]:
                 best_gloss = matches[0][1]
-                logger.info(f"Fuzzy match resolved tie token '{token}' -> '{best_gloss}' (score: {matches[0][0]})")
-                corrected_tokens.append(best_gloss)
+                if token.istitle():
+                    best_gloss = best_gloss.capitalize()
+                elif token.isupper():
+                    best_gloss = best_gloss.upper()
+                corrected_words.append(f"{prefix}{best_gloss}{suffix}")
             else:
-                corrected_tokens.append(token)
+                corrected_words.append(word)
         else:
-            corrected_tokens.append(token)
+            corrected_words.append(word)
             
-    corrected_text = " ".join(corrected_tokens)
-    return corrected_text, True
+    final_text = " ".join(corrected_words)
+    return final_text, True
+

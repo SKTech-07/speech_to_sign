@@ -105,8 +105,7 @@ class LocalWhisperProvider(BaseSTTProvider):
                 beam_size=5,
                 temperature=[0.0, 0.2, 0.4],
                 condition_on_previous_text=False,
-                vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 500},
+                vad_filter=False,
                 initial_prompt=self.initial_prompt
             )
 

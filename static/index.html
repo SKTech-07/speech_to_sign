@@ -315,6 +315,30 @@
       font-family: 'Outfit', sans-serif;
     }
 
+    .gloss-caption {
+      font-size: 0.82rem;
+      color: var(--text-subtle);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-top: 0.2rem;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 0.35rem 0.9rem;
+      border-radius: 9999px;
+      border: 1px solid var(--bg-card-border);
+    }
+
+    .gloss-caption .gloss-label {
+      color: var(--text-subtle);
+      font-weight: 600;
+    }
+
+    .gloss-caption span#glossTokensText {
+      color: var(--accent-cyan);
+      font-weight: 700;
+      font-family: 'Outfit', sans-serif;
+    }
+
     /* Multi-sign Progress Dots */
     .sequence-dots {
       display: flex;
@@ -438,19 +462,16 @@
 
     /* Action Buttons Bar */
     .actions-bar {
-      display: grid;
-      grid-template-columns: 1fr 1.5fr;
-      gap: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      width: 100%;
       margin-top: 0.5rem;
     }
 
-    @media (max-width: 640px) {
-      .actions-bar {
-        grid-template-columns: 1fr;
-      }
-    }
-
     .btn-action {
+      width: 100%;
+      box-sizing: border-box;
       padding: 0.95rem 1.5rem;
       border-radius: var(--radius-lg);
       font-weight: 600;
@@ -586,6 +607,9 @@
         <div class="status-text-main" id="statusTextMain">
           ● <span id="statusMessage">Ready for voice or text input</span>
         </div>
+        <div class="gloss-caption" id="glossCaption" style="display: none;">
+          <span class="gloss-label">GLOSS:</span> <span id="glossTokensText"></span>
+        </div>
         <div class="sequence-dots" id="sequenceDots" style="display: none;"></div>
       </div>
 
@@ -619,7 +643,7 @@
       <div class="actions-bar">
         <button class="btn-action btn-mic" id="micBtn" onclick="toggleVoiceRecording()" aria-label="Start voice recording">
           <svg id="micIcon" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-          <span id="micLabel">Speak</span>
+          <span id="micLabel">Record 00:00</span>
         </button>
 
         <button class="btn-action btn-translate" id="translateBtn" onclick="handleTranslateAndSign()" aria-label="Translate and Sign">
@@ -766,7 +790,17 @@
         activeSequenceTokens = availableTokens;
         currentSignIndex = 0;
 
-        // Handle missing sign banner
+        // Display subtle gloss sequence caption under avatar
+        const glossCaptionEl = document.getElementById('glossCaption');
+        const glossTokensEl = document.getElementById('glossTokensText');
+        if (tokens.length > 0) {
+          glossTokensEl.textContent = tokens.map(t => t.gloss).join(' • ');
+          glossCaptionEl.style.display = 'inline-block';
+        } else {
+          glossCaptionEl.style.display = 'none';
+        }
+
+        // Handle missing sign banner for content words
         if (missingTokens.length > 0) {
           const missingWords = missingTokens.map(t => `"${t.word}"`).join(', ');
           missingText.textContent = `The sign for ${missingWords} is not available yet.`;
@@ -879,6 +913,26 @@
     let recordingAutoStopTimeout = null;
     let micStream = null;
 
+    function clearRecordingTimer() {
+      if (recordTimerInterval !== null) {
+        clearInterval(recordTimerInterval);
+        recordTimerInterval = null;
+      }
+    }
+
+    function formatTimer(totalSeconds) {
+      const mins = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+      const secs = String(totalSeconds % 60).padStart(2, '0');
+      return `${mins}:${secs}`;
+    }
+
+    function updateMicLabel(text) {
+      const micLabel = document.getElementById('micLabel');
+      if (micLabel) {
+        micLabel.textContent = text;
+      }
+    }
+
     async function toggleVoiceRecording() {
       if (!isRecording) {
         startRecording();
@@ -888,6 +942,16 @@
     }
 
     async function startRecording() {
+      clearRecordingTimer();
+      if (recordingAutoStopTimeout) {
+        clearTimeout(recordingAutoStopTimeout);
+        recordingAutoStopTimeout = null;
+      }
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+
       audioChunks = [];
       try {
         micStream = await navigator.mediaDevices.getUserMedia({
@@ -923,24 +987,27 @@
         recordingStartTime = Date.now();
         recordSeconds = 0;
 
-        if (recordingAutoStopTimeout) clearTimeout(recordingAutoStopTimeout);
         recordingAutoStopTimeout = setTimeout(() => {
           if (isRecording) stopRecording();
         }, 30000);
 
         const micBtn = document.getElementById('micBtn');
         micBtn.classList.add('recording');
-        document.getElementById('micLabel').textContent = 'Recording... 00:00';
+        updateMicLabel('Recording... 00:00');
         document.getElementById('voiceStatusText').textContent = '🔴 Recording speech... Click again to stop.';
 
         recordTimerInterval = setInterval(() => {
+          if (!isRecording) {
+            clearRecordingTimer();
+            return;
+          }
           recordSeconds++;
-          const mins = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
-          const secs = String(recordSeconds % 60).padStart(2, '0');
-          document.getElementById('micLabel').textContent = `Recording... ${mins}:${secs}`;
+          updateMicLabel(`Recording... ${formatTimer(recordSeconds)}`);
         }, 1000);
 
       } catch (err) {
+        isRecording = false;
+        clearRecordingTimer();
         document.getElementById('voiceStatusText').textContent = 'Unable to access microphone. Please check browser permissions.';
       }
     }
@@ -948,12 +1015,17 @@
     async function stopRecording() {
       if (!mediaRecorder || !isRecording) return;
       isRecording = false;
-      if (recordingAutoStopTimeout) clearTimeout(recordingAutoStopTimeout);
-      clearInterval(recordTimerInterval);
+      clearRecordingTimer();
+      if (recordingAutoStopTimeout) {
+        clearTimeout(recordingAutoStopTimeout);
+        recordingAutoStopTimeout = null;
+      }
 
       const micBtn = document.getElementById('micBtn');
       micBtn.classList.remove('recording');
-      document.getElementById('micLabel').textContent = 'Speak';
+
+      const finalTimeStr = formatTimer(recordSeconds);
+      updateMicLabel(`Recording stopped ${finalTimeStr}`);
       document.getElementById('voiceStatusText').textContent = '◌ Processing speech audio...';
 
       const durationMs = Date.now() - recordingStartTime;
@@ -969,7 +1041,13 @@
           }
           resolve(blob);
         };
-        mediaRecorder.stop();
+        try {
+          if (mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+          }
+        } catch (e) {
+          resolve(new Blob(audioChunks, { type: 'audio/webm' }));
+        }
       });
 
       if (audioBlob.size < 2000 || durationMs < 600) {
@@ -979,6 +1057,15 @@
 
       await processVoiceAudio(audioBlob);
     }
+
+    window.addEventListener('beforeunload', () => {
+      isRecording = false;
+      clearRecordingTimer();
+      if (recordingAutoStopTimeout) clearTimeout(recordingAutoStopTimeout);
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+      }
+    });
 
     async function processVoiceAudio(blob) {
       const actualMime = blob.type || '';
@@ -1005,8 +1092,10 @@
         }
 
         if (data.text) {
-          document.getElementById('mainInput').value = data.text;
-          document.getElementById('voiceStatusText').textContent = '✓ Speech recognized! Review or edit text below, then click Translate & Sign.';
+          const mainInput = document.getElementById('mainInput');
+          mainInput.value = data.text;
+          mainInput.dispatchEvent(new Event('input', { bubbles: true }));
+          document.getElementById('voiceStatusText').textContent = `✓ Recognized: "${data.text}"`;
         } else {
           document.getElementById('voiceStatusText').textContent = "We didn't hear any speech.";
         }

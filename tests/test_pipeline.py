@@ -134,4 +134,39 @@ class TestGenericSignDictionaryAndCWASAPipeline:
         assert "<sigml>" in data["sigml"]
         assert 'gloss="water"' in data["sigml"]
 
+    def test_gloss_conversion_acceptance_cases(self):
+        # A. "hello welcome to light house" -> glosses HELLO WELCOME LIGHT HOUSE; "to" not in tokens
+        r_a = client.post("/sign/sequence", json={"text": "hello welcome to light house"}).json()
+        token_words = [t["word"] for t in r_a["tokens"]]
+        assert "to" not in token_words
+        assert "hello" in token_words
+        assert "welcome" in token_words
+        assert "light" in token_words
+        assert "house" in token_words
+        missing_a = [t["word"] for t in r_a["tokens"] if not t["available"]]
+        assert missing_a == ["light", "house"]
+
+        # B. "I am afraid" -> "am" not in tokens
+        r_b = client.post("/sign/sequence", json={"text": "I am afraid"}).json()
+        words_b = [t["word"] for t in r_b["tokens"]]
+        assert "am" not in words_b
+        assert "afraid" in words_b
+
+        # C. "I do not want water" -> negation preserved
+        r_c = client.post("/sign/sequence", json={"text": "I do not want water"}).json()
+        glosses_c = [t["gloss"] for t in r_c["tokens"]]
+        assert "NOT" in glosses_c or "NO" in glosses_c
+
+        # D. "what is your name" -> question word preserved, "is" removed
+        r_d = client.post("/sign/sequence", json={"text": "what is your name"}).json()
+        words_d = [t["word"] for t in r_d["tokens"]]
+        assert "is" not in words_d
+        assert "what" in words_d
+
+        # F. Single word "angry"
+        r_f = client.post("/sign/sequence", json={"text": "angry"}).json()
+        assert len(r_f["tokens"]) == 1
+        assert r_f["tokens"][0]["available"] is True
+        assert r_f["tokens"][0]["gloss"] == "ANGRY"
+
 

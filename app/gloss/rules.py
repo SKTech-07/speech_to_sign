@@ -3,8 +3,11 @@ from typing import List, Dict, Any, Optional
 
 # Words that do not carry independent sign meaning in ISL
 STOP_WORDS = {
-    "a", "an", "the", "to", "is", "am", "are", "was", "were", "be", "been", "being",
-    "do", "does", "did", "of", "for", "in", "on", "at", "by", "with"
+    "a", "an", "the",
+    "is", "am", "are", "was", "were", "be", "been", "being",
+    "do", "does", "did", "have", "has", "had", "will", "would", "shall", "should",
+    "to", "of", "at", "in", "on", "for", "with", "from", "by",
+    "that", "there"
 }
 
 # Modal and desire verbs that typically follow the main action verb in ISL
